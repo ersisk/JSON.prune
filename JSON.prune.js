@@ -70,88 +70,130 @@
 	}
 
 
-	var prune = function (value, depthDecr, arrayMaxLength) {
-		var prunedString = DEFAULT_PRUNED_VALUE;
-		var replacer;
-		if (typeof depthDecr == "object") {
-			var options = depthDecr;
-			depthDecr = options.depthDecr;
-			arrayMaxLength = options.arrayMaxLength;
-			iterator = options.iterator || forEachEnumerableOwnProperty;
-			if (options.allProperties) iterator = forEachProperty;
-			else if (options.inheritedProperties) iterator = forEachEnumerableProperty
-			if ("prunedString" in options) {
-				prunedString = options.prunedString;
-			}
-			if (options.replacer) {
-				replacer = options.replacer;
-			}
-		} else {
-			iterator = forEachEnumerableOwnProperty;
-		}
-		seen = [];
-		depthDecr = depthDecr || DEFAULT_MAX_DEPTH;
-		arrayMaxLength = arrayMaxLength || DEFAULT_ARRAY_MAX_LENGTH;
-		function str(key, holder, depthDecr) {
-			var i, k, v, length, partial, value = holder[key];
+var prune = function (value, depthDecr, arrayMaxLength) {
+  var prunedString = DEFAULT_PRUNED_VALUE;
+  var replacer;
+  if (typeof depthDecr == "object") {
+    var options = depthDecr;
+    depthDecr = options.depthDecr;
+    arrayMaxLength = options.arrayMaxLength;
+    iterator = options.iterator || forEachEnumerableOwnProperty;
+    if (options.allProperties) iterator = forEachProperty;
+    else if (options.inheritedProperties) iterator = forEachEnumerableProperty;
+    if ("prunedString" in options) {
+      prunedString = options.prunedString;
+    }
+    if (options.replacer) {
+      replacer = options.replacer;
+    }
+  } else {
+    iterator = forEachEnumerableOwnProperty;
+  }
+  seen = [];
+  depthDecr = depthDecr || DEFAULT_MAX_DEPTH;
+  arrayMaxLength = arrayMaxLength || DEFAULT_ARRAY_MAX_LENGTH;
+  function str(key, holder, depthDecr) {
+    var i,
+      k,
+      v,
+      length,
+      partial,
+      value = holder[key];
 
-			if (value && typeof value === 'object' && typeof value.toPrunedJSON === 'function') {
-				value = value.toPrunedJSON(key);
-			}
-			if (value && typeof value.toJSON === 'function') {
-				value = value.toJSON();
-			}
+    if (
+      value &&
+      typeof value === "object" &&
+      typeof value.toPrunedJSON === "function"
+    ) {
+      value = value.toPrunedJSON(key);
+    }
+    if (value && typeof value.toJSON === "function") {
+      value = value.toJSON();
+    }
 
-			switch (typeof value) {
-			case 'string':
-				return quote(value);
-			case 'number':
-				return isFinite(value) ? String(value) : 'null';
-			case 'boolean':
-			case 'null':
-				return String(value);
-			case 'object':
-				if (!value) {
-					return 'null';
-				}
-				if (depthDecr<=0 || seen.indexOf(value)!==-1) {
-					if (replacer) {
-						var replacement = replacer(value, prunedString, true);
-						return replacement===undefined ? undefined : ''+replacement;
-					}
-					return prunedString;
-				}
-				seen.push(value);
-				partial = [];
-				if (Object.prototype.toString.apply(value) === '[object Array]') {
-					length = Math.min(value.length, arrayMaxLength);
-					for (i = 0; i < length; i += 1) {
-						partial[i] = str(i, value, depthDecr-1) || 'null';
-					}
-					v = '[' + partial.join(',') + ']';
-					if (replacer && value.length>arrayMaxLength) return replacer(value, v, false);
-					return v;
-				}
-				if (value instanceof RegExp) {
-					return quote(value.toString());
-				}
-				iterator(value, function(k) {
-					try {
-						v = str(k, value, depthDecr-1);
-						if (v) partial.push(quote(k) + ':' + v);
-					} catch (e) {
-						// this try/catch due to forbidden accessors on some objects
-					}
-				});
-				return '{' + partial.join(',') + '}';
-			case 'function':
-			case 'undefined':
-				return replacer ? replacer(value, undefined, false) : undefined;
-			}
-		}
-		return str('', {'': value}, depthDecr);
-	};
+    switch (typeof value) {
+      case "string":
+        return quote(value);
+      case "number":
+        return isFinite(value) ? String(value) : "null";
+      case "boolean":
+      case "null":
+        return String(value);
+      case "object":
+        if (!value) {
+          return "null";
+        }
+        if (depthDecr <= 0 || seen.indexOf(value) !== -1) {
+          if (replacer) {
+            var replacement = replacer(value, prunedString, true);
+            return replacement === undefined ? undefined : "" + replacement;
+          }
+          return prunedString;
+        }
+        seen.push(value);
+        partial = [];
+        if (Object.prototype.toString.apply(value) === "[object Array]") {
+          /*length = Math.min(value.length, arrayMaxLength);
+          for (i = 0; i < length; i += 1) {
+            partial[i] = str(i, value, depthDecr - 1) || "null";
+          }*/
+          length = Math.min(value.length, arrayMaxLength);
+          if (value.lenght < arrayMaxLength) {
+            for (i = 0; i < length; i += 1) {
+              partial[i] = str(i, value, depthDecr - 1) || "null";
+            }
+          } else {
+            let headToHeadLength = Math.round(length / 2);
+            let trop = value.length - length;
+            let endTrop = length % 2;
+            let partialCount = 0;
+            let partialKey = 0;
+            for (i = 0; i <= headToHeadLength; i += 1) {
+              partial[i] = str(i, value, depthDecr - 1) || "null";
+              partialKey = i;
+              partialCount++;
+            }
+            if (trop > 0) {
+              partialKey += trop;
+              partialKey += endTrop > 0 ? endTrop : 1;
+            }
 
+            if (partialCount < length) {
+              for (i = 0; i < headToHeadLength; i += 1) {
+                if (partialCount === arrayMaxLength) {
+                  break;
+                }
+                partial[partialCount] =
+                  str(partialKey, value, depthDecr - 1) || "null";
+                partialKey++;
+                partialCount++;
+              }
+            }
+          }
+          v = "[" + partial.join(",") + "]";
+          if (replacer && value.length > arrayMaxLength)
+            return replacer(value, v, false);
+          return v;
+        }
+        if (value instanceof RegExp) {
+          return quote(value.toString());
+        }
+        iterator(value, function (k) {
+          try {
+            v = str(k, value, depthDecr - 1);
+            if (v) partial.push(quote(k) + ":" + v);
+          } catch (e) {
+            // this try/catch due to forbidden accessors on some objects
+          }
+        });
+        return "{" + partial.join(",") + "}";
+      case "function":
+      case "undefined":
+        return replacer ? replacer(value, undefined, false) : undefined;
+    }
+  }
+  return str("", { "": value }, depthDecr);
+};
 	prune.log = function() {
 		console.log.apply(console, Array.prototype.map.call(arguments, function(v) {
 			return JSON.parse(JSON.prune(v));
